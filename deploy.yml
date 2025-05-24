@@ -1,0 +1,40 @@
+import boto3
+from PIL import Image
+import io
+import logging
+
+# Setup logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+s3 = boto3.client('s3')
+
+def lambda_handler(event, context):
+    try:
+        logger.info("Event received: %s", event)
+        
+        bucket = event['Records'][0]['s3']['bucket']['name']
+        key = event['Records'][0]['s3']['object']['key']
+        
+        logger.info(f"Processing file: {key} from bucket: {bucket}")
+        
+        img_object = s3.get_object(Bucket=bucket, Key=key)
+        img_data = img_object['Body'].read()
+
+        img = Image.open(io.BytesIO(img_data))
+        img = img.resize((200, 200))
+
+        out_buffer = io.BytesIO()
+        img.save(out_buffer, 'JPEG')
+        out_buffer.seek(0)
+
+        output_bucket = 'image-output-bucket'
+        s3.put_object(Bucket=output_bucket, Key=f"resized-{key}", Body=out_buffer, ContentType='image/jpeg')
+        
+        logger.info(f"Image saved to: {output_bucket}/resized-{key}")
+        
+        return {"status": "Image resized and uploaded successfully"}
+
+    except Exception as e:
+        logger.error("Error occurred: %s", str(e))
+        raise e
